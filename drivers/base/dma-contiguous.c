@@ -258,7 +258,8 @@ int __init cma_fdt_scan(unsigned long node, const char *uname,
 
 	pr_info("Found %s, memory base %lx, size %ld MiB, limit %pa\n", uname,
 		(unsigned long)base, (unsigned long)size / SZ_1M, &limit);
-	dma_contiguous_reserve_area(size, &base, limit, name);
+	dma_contiguous_reserve_area(size, &base, limit, name,
+					in_system);
 
 	return 0;
 }
