@@ -21,7 +21,6 @@
 #include <asm/ucontext.h>
 #include <asm/unistd.h>
 #include <asm/vfp.h>
-#include "signal.h"
 
 #define _BLOCKABLE (~(sigmask(SIGKILL) | sigmask(SIGSTOP)))
 
@@ -48,6 +47,8 @@ static const unsigned long sigreturn_codes[7] = {
 	MOV_R7_NR_SIGRETURN,    SWI_SYS_SIGRETURN,    SWI_THUMB_SIGRETURN,
 	MOV_R7_NR_RT_SIGRETURN, SWI_SYS_RT_SIGRETURN, SWI_THUMB_RT_SIGRETURN,
 };
+
+static unsigned long signal_return_offset;
 
 /*
  * atomically swap in the new signal mask, and wait for a signal.
@@ -99,8 +100,6 @@ sys_sigaction(int sig, const struct old_sigaction __user *act,
 
 	return ret;
 }
-
-static unsigned long signal_return_offset;
 
 #ifdef CONFIG_CRUNCH
 static int preserve_crunch_context(struct crunch_sigframe __user *frame)
