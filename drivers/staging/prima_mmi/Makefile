@@ -576,7 +576,25 @@ EXTRA_CFLAGS += -Wno-maybe-uninitialized -Wno-unused-function
 
 KBUILD_CPPFLAGS += $(CDEFINES)
 
+# Objects required by the driver file
+OBJS := $(VOSS_OBJS) \
+                $(BAP_OBJS)  \
+                $(TL_OBJS)   \
+                $(SME_OBJS)  \
+                $(SYS_OBJS)  \
+                $(SAP_OBJS)  \
+                $(MAC_OBJS)  \
+                $(HAL_OBJS)  \
+                $(HDD_OBJS)  \
+                $(NLINK_OBJS)\
+                $(BTC_OBJS)  \
+                $(PTT_OBJS)  \
+                $(WDA_OBJS)  \
+                $(WDI_OBJS)  \
+                $(DXE_OBJS)  \
+
+
 # Module information used by KBuild framework
-obj-$(CONFIG_PRIMA_WLAN) += $(MODNAME).o
-obj-$(CONFIG_PRONTO_WLAN) += $(MODNAME).o
-$(MODNAME)-y := $(OBJS)
+obj-$(CONFIG_PRIMA_WLAN) := $(MODNAME).o
+obj-$(CONFIG_PRONTO_WLAN) := $(MODNAME).o
+$(MODNAME)-y += $(OBJS)
