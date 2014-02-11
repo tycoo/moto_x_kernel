@@ -825,13 +825,19 @@ static int __init vfp_init(void)
 #endif
 		}
 	}
+
 	return 0;
 }
 
-static int __init vfp_rootfs_init(void)
+/*
+ * VFP late initialisation.
+ */
+static int __init vfp_late_init(void)
 {
 #ifdef CONFIG_PROC_FS
 	static struct proc_dir_entry *procfs_entry;
+
+	pr_debug("Create procfs node for VFP bounce reporting\n");
 
 	procfs_entry = create_proc_entry("cpu/vfp_bounce", S_IRUGO, NULL);
 
@@ -840,8 +846,9 @@ static int __init vfp_rootfs_init(void)
 	else
 		pr_err("Failed to create procfs node for VFP bounce reporting\n");
 #endif
+
 	return 0;
 }
 
 core_initcall(vfp_init);
-rootfs_initcall(vfp_rootfs_init);
+late_initcall(vfp_late_init);
