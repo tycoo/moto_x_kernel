@@ -560,6 +560,7 @@ static inline void kgsl_cancel_events_timestamp(struct kgsl_device *device,
 	kgsl_signal_event(device, context, timestamp, KGSL_EVENT_CANCELLED);
 }
 
+
 /**
 * kgsl_process_private_get() - increment the refcount on a kgsl_process_private
 *   struct

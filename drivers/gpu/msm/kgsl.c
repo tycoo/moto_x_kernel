@@ -544,22 +544,26 @@ kgsl_create_context(struct kgsl_device_private *dev_priv)
 		KGSL_DRV_INFO(device, "cannot have more than %d "
 				"ctxts due to memstore limitation\n",
 				KGSL_MEMSTORE_MAX);
-		write_lock(&device->context_lock);
-		idr_remove(&device->context_idr, id);
-		write_unlock(&device->context_lock);
 		ret = -ENOSPC;
-		goto func_end;
+		goto fail_free_id;
 	}
 
 	kref_init(&context->refcount);
-	context->dev_priv = dev_priv;
+	/*
+	 * Get a refernce to the process private so its not destroyed, until
+	 * the context is destroyed. This will also prevent the pagetable
+	 * from being destroyed
+	 */
+	if (!kgsl_process_private_get(dev_priv->process_priv)) {
+		ret = -EBADF;
+		goto fail_free_id;
+	}
 
+	context->dev_priv = dev_priv;
 	ret = kgsl_sync_timeline_create(context);
 	if (ret) {
-		write_lock(&device->context_lock);
-		idr_remove(&dev_priv->device->context_idr, id);
-		write_unlock(&device->context_lock);
-		goto func_end;
+		kgsl_process_private_put(dev_priv->process_priv);
+		goto fail_free_id;
 	}
 
 	/* Initialize the pending event list */
@@ -575,6 +579,13 @@ kgsl_create_context(struct kgsl_device_private *dev_priv)
 	 */
 
 	INIT_LIST_HEAD(&context->events_list);
+
+fail_free_id:
+	if (ret) {
+		write_lock(&device->context_lock);
+		idr_remove(&device->context_idr, id);
+		write_unlock(&device->context_lock);
+	}
 
 func_end:
 	if (ret) {
@@ -622,8 +633,6 @@ kgsl_context_detach(struct kgsl_context *context)
 	idr_remove(&device->context_idr, id);
 	write_unlock(&device->context_lock);
 
-	context->dev_priv = NULL;
-
 	kgsl_context_put(context);
 }
 
@@ -633,6 +642,7 @@ kgsl_context_destroy(struct kref *kref)
 	struct kgsl_context *context = container_of(kref, struct kgsl_context,
 						    refcount);
 	kgsl_sync_timeline_destroy(context);
+	kgsl_process_private_put(context->dev_priv->process_priv);
 	kfree(context);
 }
 
@@ -950,7 +960,8 @@ kgsl_find_process_private(struct kgsl_device_private *cur_dev_priv)
 	mutex_lock(&kgsl_driver.process_mutex);
 	list_for_each_entry(private, &kgsl_driver.process_list, list) {
 		if (private->pid == task_tgid_nr(current)) {
-			kref_get(&private->refcount);
+			if (!kgsl_process_private_get(private))
+				private = NULL;
 			goto done;
 		}
 	}
@@ -1019,7 +1030,6 @@ kgsl_get_process_private(struct kgsl_device_private *cur_dev_priv)
 
 done:
 	mutex_unlock(&private->process_private_mutex);
-
 	return private;
 }
 
