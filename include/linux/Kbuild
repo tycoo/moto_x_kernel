@@ -453,3 +453,4 @@ header-y += msm_audio_amrwbplus.h
 header-y += coresight-stm.h
 header-y += avtimer.h
 header-y += msp430.h
+header-y += msm_pft.h
