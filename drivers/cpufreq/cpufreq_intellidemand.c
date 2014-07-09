@@ -34,7 +34,7 @@
 #endif
 
 #define INTELLIDEMAND_MAJOR_VERSION    5
-#define INTELLIDEMAND_MINOR_VERSION    0
+#define INTELLIDEMAND_MINOR_VERSION    5
 
 /*
  * dbs is used in this file as a shortform for demandbased switching
@@ -564,7 +564,7 @@ static ssize_t store_ui_timeout(struct kobject *a, struct attribute *b,
 	return count;
 }
 
-static int two_phase_freq_array[NR_CPUS] = {[0 ... NR_CPUS-1] = 0} ;
+static int two_phase_freq_array[NR_CPUS] = {[0 ... NR_CPUS-1] = 1512000} ;
 
 static ssize_t show_two_phase_freq
 (struct kobject *kobj, struct attribute *attr, char *buf)
@@ -604,7 +604,7 @@ static ssize_t store_two_phase_freq(struct kobject *a, struct attribute *b,
 static int input_event_min_freq_array[NR_CPUS] = {[0 ... NR_CPUS-1] = DBS_INPUT_EVENT_MIN_FREQ} ;
 
 static ssize_t show_input_event_min_freq
-(struct kobject *kobj, struct attribute *attr, char *buf)
+		(struct kobject *kobj, struct attribute *attr, char *buf)
 {
 	int i = 0 ;
 	int shift = 0 ;
@@ -617,8 +617,8 @@ static ssize_t show_input_event_min_freq
 	return strlen(buf);
 }
 
-static ssize_t store_input_event_min_freq(struct kobject *a, struct attribute *b,
-		const char *buf, size_t count)
+static ssize_t store_input_event_min_freq(struct kobject *a,
+		struct attribute *b, const char *buf, size_t count)
 {
 
 	int ret = 0;
@@ -1177,7 +1177,7 @@ static ssize_t store_step_up_interim_hispeed(struct kobject *a,
 	int ret;
 	ret = sscanf(buf, "%u", &input);
 
-	if (ret != 1 || input > 1512000 ||
+	if (ret != 1 || input > DEF_STEP_UP_INTERIM_HISPEED ||
 			input < 0) {
 		return -EINVAL;
 	}
@@ -1296,19 +1296,7 @@ static void dbs_freq_increase(struct cpufreq_policy *p, unsigned int freq)
 			CPUFREQ_RELATION_L : CPUFREQ_RELATION_H);
 }
 
-int set_two_phase_freq(int cpufreq)
-{
-	int i  = 0;
-	for ( i = 0 ; i < NR_CPUS; i++)
-		two_phase_freq_array[i] = cpufreq;
-	return 0;
-}
-
-void set_two_phase_freq_by_cpu ( int cpu_nr, int cpufreq){
-	two_phase_freq_array[cpu_nr-1] = cpufreq;
-}
-
-int input_event_boosted(void)
+static int input_event_boosted(void)
 {
 	unsigned long flags;
 
@@ -1419,7 +1407,27 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		if (unlikely(!wall_time || wall_time < idle_time))
 			continue;
 
-		cur_load = 100 * (wall_time - idle_time) / wall_time;
+		/*
+		 * If the CPU had gone completely idle, and a task just woke up
+		 * on this CPU now, it would be unfair to calculate 'load' the
+		 * usual way for this elapsed time-window, because it will show
+		 * near-zero load, irrespective of how CPU intensive the new
+		 * task is. This is undesirable for latency-sensitive bursty
+		 * workloads.
+		 *
+		 * To avoid this, we reuse the 'load' from the previous
+		 * time-window and give this task a chance to start with a
+		 * reasonably high CPU frequency.
+		 *
+		 * Detecting this situation is easy: the governor's deferrable
+		 * timer would not have fired during CPU-idle periods. Hence
+		 * an unusually large 'wall_time' indicates this scenario.
+		 */
+		if (unlikely(wall_time > (2 * dbs_tuners_ins.sampling_rate))) {
+			cur_load = j_dbs_info->prev_load;
+		} else {
+			cur_load = 100 * (wall_time - idle_time) / wall_time;
+		}
 		j_dbs_info->max_load  = max(cur_load, j_dbs_info->prev_load);
 		j_dbs_info->prev_load = cur_load;
 		freq_avg = __cpufreq_driver_getavg(policy, j);
@@ -1465,8 +1473,6 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 
 	/* calculate the scaled load across CPU */
 	load_at_max_freq = (cur_load * policy->cur)/policy->cpuinfo.max_freq;
-
-	cpufreq_notify_utilization(policy, load_at_max_freq);
 
 /* PATCH : SMART_UP */
 	if (dbs_tuners_ins.smart_up && ( core_j + 1 ) > dbs_tuners_ins.smart_each_off ){
@@ -2063,16 +2069,15 @@ static int input_dev_filter(const char *input_dev_name)
 	}
 }
 
-
 static int dbs_input_connect(struct input_handler *handler,
 		struct input_dev *dev, const struct input_device_id *id)
 {
 	struct input_handle *handle;
 	int error;
-	
+
 	if (input_dev_filter(dev->name))
 		return -ENODEV;
-
+	
 	handle = kzalloc(sizeof(struct input_handle), GFP_KERNEL);
 	if (!handle)
 		return -ENOMEM;
@@ -2113,7 +2118,7 @@ static struct input_handler dbs_input_handler = {
 	.event		= dbs_input_event,
 	.connect	= dbs_input_connect,
 	.disconnect	= dbs_input_disconnect,
-	.name		= "cpufreq_ond",
+	.name		= "cpufreq_id",
 	.id_table	= dbs_ids,
 };
 
@@ -2149,11 +2154,16 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 		dbs_enable++;
 		for_each_cpu(j, policy->cpus) {
 			struct cpu_dbs_info_s *j_dbs_info;
+			cputime64_t tmp;
 			j_dbs_info = &per_cpu(id_cpu_dbs_info, j);
 			j_dbs_info->cur_policy = policy;
 
 			j_dbs_info->prev_cpu_idle = get_cpu_idle_time(j,
 						&j_dbs_info->prev_cpu_wall);
+			tmp = j_dbs_info->prev_cpu_wall -
+				j_dbs_info->prev_cpu_idle;
+			do_div(tmp, j_dbs_info->prev_cpu_wall);
+			j_dbs_info->prev_load = 100 * tmp;
 			if (dbs_tuners_ins.ignore_nice)
 				j_dbs_info->prev_cpu_nice =
 						kcpustat_cpu(j).cpustat[CPUTIME_NICE];
