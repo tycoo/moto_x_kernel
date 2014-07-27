@@ -200,6 +200,11 @@ static unsigned int input_boost_duration;
 static unsigned int touch_poke_freq;
 static bool touch_poke = true;
 
+/* when called via register_early_suspend, cpufreq has already
+   called lock_policy_rwsem_write.
+*/
+static bool registering_early_suspend = false;
+
 /*
  * should ramp_up steps during boost be possible
  */
@@ -261,7 +266,7 @@ enum {
  * Combination of the above debug flags.
  */
 //static unsigned long debug_mask = SMARTMAX_DEBUG_LOAD|SMARTMAX_DEBUG_JUMPS|SMARTMAX_DEBUG_ALG|SMARTMAX_DEBUG_BOOST|SMARTMAX_DEBUG_INPUT|SMARTMAX_DEBUG_SUSPEND;
-static unsigned long debug_mask;
+static unsigned long debug_mask = SMARTMAX_DEBUG_SUSPEND;
 
 #define SMARTMAX_STAT 0
 #if SMARTMAX_STAT
@@ -312,11 +317,11 @@ static int cpufreq_governor_smartmax(struct cpufreq_policy *policy,
 static
 #endif
 struct cpufreq_governor cpufreq_gov_smartmax = { 
-    .name = "smartmax", 
-    .governor = cpufreq_governor_smartmax, 
-    .max_transition_latency = TRANSITION_LATENCY_LIMIT, 
-    .owner = THIS_MODULE,
-    };
+	.name = "smartmax", 
+	.governor = cpufreq_governor_smartmax, 
+	.max_transition_latency = TRANSITION_LATENCY_LIMIT, 
+	.owner = THIS_MODULE,
+};
 
 static inline u64 get_cpu_idle_time_jiffy(unsigned int cpu, u64 *wall) {
 
@@ -385,9 +390,14 @@ inline static void smartmax_update_min_max_allcpus(void) {
 	for_each_online_cpu(cpu)
 	{
 		struct smartmax_info_s *this_smartmax = &per_cpu(smartmax_info, cpu);
-		if (this_smartmax->cur_policy){
-			if (lock_policy_rwsem_write(cpu) < 0)
+
+		// If called via register_early_suspend, cpufreq_governor_smartmax
+		// already called smartmsx_update_min_max and cpufreq.c already locked.
+		if (!registering_early_suspend && this_smartmax->cur_policy) {
+			if (lock_policy_rwsem_write(cpu) < 0) {
+				dprintk(SMARTMAX_DEBUG_SUSPEND, "%s: warn: did not lock_policy_rwsem_write(cpu%d)\n", __func__, cpu);              
 				continue;
+			}
 
 			smartmax_update_min_max(this_smartmax, this_smartmax->cur_policy);
 			
@@ -1140,15 +1150,15 @@ static int cpufreq_smartmax_boost_task(void *data) {
 		if (!policy)
 			continue;
 
-        if (lock_policy_rwsem_write(0) < 0)
-        	continue;
+		if (lock_policy_rwsem_write(0) < 0)
+			continue;
 		
 		tegra_input_boost(policy, cur_boost_freq, CPUFREQ_RELATION_H);
 	
-        this_smartmax->prev_cpu_idle = get_cpu_idle_time(0,
+		this_smartmax->prev_cpu_idle = get_cpu_idle_time(0,
 						&this_smartmax->prev_cpu_wall);
 
-        unlock_policy_rwsem_write(0);
+		unlock_policy_rwsem_write(0);
 #else		
 		for_each_online_cpu(cpu){
 			this_smartmax = &per_cpu(smartmax_info, cpu);
@@ -1307,7 +1317,7 @@ static int cpufreq_governor_smartmax(struct cpufreq_policy *new_policy,
 	int rc;
 	struct smartmax_info_s *this_smartmax = &per_cpu(smartmax_info, cpu);
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
-    unsigned int latency;
+	unsigned int latency;
 
 	switch (event) {
 	case CPUFREQ_GOV_START:
@@ -1368,7 +1378,9 @@ static int cpufreq_governor_smartmax(struct cpufreq_policy *new_policy,
 				return rc;
 			}
 #ifdef CONFIG_HAS_EARLYSUSPEND
+			registering_early_suspend = true;
 			register_early_suspend(&smartmax_early_suspend_handler);
+			registering_early_suspend = false;
 #endif
 			/* policy latency is in nS. Convert it to uS first */
 			latency = new_policy->cpuinfo.transition_latency / 1000;
