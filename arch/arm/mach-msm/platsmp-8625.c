@@ -111,7 +111,7 @@ void __cpuinit platform_secondary_init(unsigned int cpu)
 	 */
 	write_pen_release(-1);
 
-	/* clear the IPC pending SPI */
+	/* clear the IPC1(SPI-8) pending SPI */
 	if (power_collapsed) {
 		raise_clear_spi(cpu, false);
 		clear_pending_spi(MSM8625_INT_ACSR_MP_CORE_IPC1);
@@ -206,7 +206,7 @@ int __cpuinit boot_secondary(unsigned int cpu, struct task_struct *idle)
 	 */
 
 	if (power_collapsed) {
-		gic_configure_and_raise(cpu_data[cpu].ipc_irq, cpu);
+		core1_gic_configure_and_raise();
 		raise_clear_spi(cpu, true);
 	} else {
 		gic_raise_softirq(cpumask_of(cpu), 1);
