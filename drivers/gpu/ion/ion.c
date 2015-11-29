@@ -1641,7 +1641,7 @@ retry:
 				seq_printf(s, "Couldn't get client lock...\n");
 				continue;
 			}
-			mutex_unlock(&dev->lock);
+			up_read(&dev->lock);
 			goto retry;
 		}
 
@@ -1800,7 +1800,7 @@ retry:
 				seq_printf(s, "Couldn't get client lock...\n");
 				continue;
 			}
-			mutex_unlock(&dev->lock);
+			up_write(&dev->lock);
 			goto retry;
 		}
 
@@ -1849,7 +1849,7 @@ static int ion_debug_allbufs_show(struct seq_file *s, void *unused)
 	seq_printf(s, "%16.s %12.s %12.s %12.s %20.s    %s\n", "heap",
 		"buffer", "size", "ref cnt", "allocator", "references");
 
-	mutex_lock(&dev->lock);
+	down_write(&dev->lock);
 	for (n = rb_first(&dev->buffers); n; n = rb_next(n)) {
 		struct rb_node *j;
 		struct ion_buffer *buf = rb_entry(n, struct ion_buffer, node);
@@ -1889,7 +1889,7 @@ static int ion_debug_allbufs_show(struct seq_file *s, void *unused)
 
 		seq_printf(s, "\n");
 	}
-	mutex_unlock(&dev->lock);
+	up_write(&dev->lock);
 	return 0;
 }
 
