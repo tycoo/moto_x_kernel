@@ -805,6 +805,7 @@ int gpio_export_link(struct device *dev, const char *name, unsigned gpio)
 		if (tdev != NULL) {
 			status = sysfs_create_link(&dev->kobj, &tdev->kobj,
 						name);
+			put_device(tdev);
 		} else {
 			status = -ENODEV;
 		}
@@ -855,7 +856,7 @@ int gpio_sysfs_set_active_low(unsigned gpio, int value)
 	}
 
 	status = sysfs_set_active_low(desc, dev, value);
-
+	put_device(dev);
 unlock:
 	mutex_unlock(&sysfs_lock);
 
@@ -1081,19 +1082,18 @@ int gpiochip_add(struct gpio_chip *chip)
 				? (1 << FLAG_IS_OUT)
 				: 0;
 		}
-	}
 
-	of_gpiochip_add(chip);
+		of_gpiochip_add(chip);
+	}
 
 unlock:
 	spin_unlock_irqrestore(&gpio_lock, flags);
 
-	if (status)
-		goto fail;
-
 	status = gpiochip_export(chip);
-	if (status)
+	if (status) {
+		of_gpiochip_remove(chip);
 		goto fail;
+	}
 
 	pr_info("gpiochip_add: registered GPIOs %d to %d on device: %s\n",
 		chip->base, chip->base + chip->ngpio - 1,
