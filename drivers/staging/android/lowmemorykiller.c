@@ -30,7 +30,6 @@
  *
  */
 
-#define REALLY_WANT_TRACEPOINTS
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
