@@ -39,6 +39,14 @@
 #include "acpuclock-krait.h"
 #include "avs.h"
 
+#ifdef CONFIG_CPU_OVERCLOCK
+#define OVERCLOCK_EXTRA_FREQS	3
+#else
+#define OVERCLOCK_EXTRA_FREQS	0
+#endif
+
+#define FREQ_TABLE_SIZE		(35 + OVERCLOCK_EXTRA_FREQS)
+
 /* MUX source selects. */
 #define PRI_SRC_SEL_SEC_SRC	0
 #define PRI_SRC_SEL_HFPLL	1
@@ -958,7 +966,7 @@ static void __init bus_init(const struct l2_level *l2_level)
 }
 
 #ifdef CONFIG_CPU_FREQ_MSM
-static struct cpufreq_frequency_table freq_table[NR_CPUS][35];
+static struct cpufreq_frequency_table freq_table[NR_CPUS][FREQ_TABLE_SIZE];
 
 #ifdef CONFIG_MSM_CPU_VOLTAGE_CONTROL
 #define CPU_VDD_MAX		1300
