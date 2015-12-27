@@ -1575,7 +1575,7 @@ if CPU_FREQ_MSM
 
 config MSM_CPU_FREQ_SET_MIN_MAX
 	bool "Set Min/Max CPU frequencies."
-	default n
+	default y
 	help
 	  Allow setting min and max CPU frequencies. Sysfs can be used
 	  to override these values.
@@ -1583,12 +1583,12 @@ config MSM_CPU_FREQ_SET_MIN_MAX
 config MSM_CPU_FREQ_MAX
 	int "Max CPU Frequency"
 	depends on MSM_CPU_FREQ_SET_MIN_MAX
-	default 384000
+	default 1728000
 
 config MSM_CPU_FREQ_MIN
 	int "Min CPU Frequency"
 	depends on MSM_CPU_FREQ_SET_MIN_MAX
-	default 245760
+	default 384000
 
 endif # CPU_FREQ_MSM
 
@@ -1597,6 +1597,12 @@ config MSM_CPU_VOLTAGE_CONTROL
 	default y
 	help
 	  This enables userspace CPU Voltage Control
+
+config CPU_OVERCLOCK
+	bool "Enable CPU Overclocking option"
+	default n
+	help
+	  Krait overclocking up to 1.9 GHz
 
 config MSM_AVS_HW
 	bool "Enable Adaptive Voltage Scaling (AVS)"
