@@ -1803,7 +1803,8 @@ static void binder_transaction(struct binder_proc *proc,
 				return_error = BR_FAILED_REPLY;
 				goto err_get_unused_fd_failed;
 			}
-			target_fd = task_get_unused_fd_flags(target_proc, O_CLOEXEC);
+			target_fd = task_get_unused_fd_flags(target_proc,
+								O_CLOEXEC);
 			if (target_fd < 0) {
 				fput(file);
 				return_error = BR_FAILED_REPLY;
