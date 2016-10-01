@@ -130,9 +130,6 @@
  */
 #define PR_SET_TIMERSLACK_PID 41
 
-#define PR_SET_VMA		0x53564d41
-# define PR_SET_VMA_ANON_NAME		0
-
 /*
  * If no_new_privs is set, then operations that grant new privileges (i.e.
  * execve) will either fail or not grant them.  This affects suid/sgid,
