@@ -994,9 +994,9 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 
 				t = cpu_clock(printk_cpu);
 				nanosec_rem = do_div(t, 1000000000);
-				tlen = sprintf(tbuf, "[%5lu.%06lu,%d] ",
+				tlen = sprintf(tbuf, "[%5lu.%06lu] ",
 						(unsigned long) t,
-						nanosec_rem / 1000, this_cpu);
+						nanosec_rem / 1000);
 
 				for (tp = tbuf; tp < tbuf + tlen; tp++)
 					emit_log_char(*tp);
