@@ -27,7 +27,6 @@
 #include <linux/slab.h>
 
 #include <asm/cputype.h>
-#include <asm/delay.h>
 #include <asm/localtimer.h>
 #include <asm/arch_timer.h>
 #include <asm/sched_clock.h>
@@ -42,7 +41,6 @@ static int arch_timer_ppi2;
 static struct clock_event_device __percpu **arch_timer_evt;
 static void __iomem *timer_base;
 
-static struct delay_timer arch_delay_timer;
 
 /*
  * Architected system timer support.
@@ -350,10 +348,13 @@ static cycle_t arch_counter_read(struct clocksource *cs)
 	return arch_counter_get_cntpct();
 }
 
-static unsigned long arch_timer_read_current_timer(void)
+#ifdef ARCH_HAS_READ_CURRENT_TIMER
+int read_current_timer(unsigned long *timer_val)
 {
-	return arch_counter_get_cntpct();
+	*timer_val = (unsigned long)arch_specific_timer->get_cntpct();
+	return 0;
 }
+#endif
 
 static struct clocksource clocksource_counter = {
 	.name	= "arch_sys_counter",
@@ -404,11 +405,6 @@ static void __init arch_timer_counter_init(void)
 	clocksource_register_hz(&clocksource_counter, arch_timer_rate);
 
 	setup_sched_clock(arch_timer_update_sched_clock, 32, arch_timer_rate);
-
-	/* Use the architected timer for the delay loop. */
-	arch_delay_timer.read_current_timer = &arch_timer_read_current_timer;
-	arch_delay_timer.freq = arch_timer_rate;
-	register_current_timer_delay(&arch_delay_timer);
 }
 
 #ifdef CONFIG_CPU_PM
@@ -452,6 +448,10 @@ static int __init arch_timer_common_register(void)
 	arch_timer_evt = alloc_percpu(struct clock_event_device *);
 	if (!arch_timer_evt)
 		return -ENOMEM;
+
+#ifdef ARCH_HAS_READ_CURRENT_TIMER
+	set_delay_fn(read_current_timer_delay_loop);
+#endif
 
 	err = request_percpu_irq(arch_timer_ppi, arch_timer_handler_cp15,
 			 "arch_timer", arch_timer_evt);
