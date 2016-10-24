@@ -162,9 +162,6 @@ unsigned int ft_detect_regs[FT_DETECT_REGS_COUNT] = {
 	0
 };
 
-static void adreno_hang_panic_work_func(struct work_struct *work);
-static struct delayed_work adreno_hang_panic_work;
-static struct kgsl_device *adreno_hang_panic_device = NULL;
 
 /*
  * This is the master list of all GPU cores that are supported by this
@@ -1546,8 +1543,6 @@ adreno_probe(struct platform_device *pdev)
 	kgsl_pwrscale_init(device);
 	kgsl_pwrscale_attach_policy(device, ADRENO_DEFAULT_PWRSCALE_POLICY);
 
-	INIT_DELAYED_WORK(&adreno_hang_panic_work, adreno_hang_panic_work_func);
-
 	device->flags &= ~KGSL_FLAGS_SOFT_RESET;
 	return 0;
 
@@ -2597,8 +2592,6 @@ adreno_dump_and_exec_ft(struct kgsl_device *device)
 
 		if (result) {
 			kgsl_pwrctrl_set_state(device, KGSL_STATE_HUNG);
-			adreno_hang_panic_device = device;
-			schedule_delayed_work(&adreno_hang_panic_work, msecs_to_jiffies(10000));
 		} else {
 			kgsl_pwrctrl_set_state(device, KGSL_STATE_ACTIVE);
 			mod_timer(&device->idle_timer, jiffies + FIRST_TIMEOUT);
@@ -2612,13 +2605,6 @@ done:
 	return result;
 }
 EXPORT_SYMBOL(adreno_dump_and_exec_ft);
-
-static void adreno_hang_panic_work_func(struct work_struct *work)
-{
-	KGSL_DRV_ERR(adreno_hang_panic_device,
-	             "Cannot recover GPU. Device will be restarted");
-	BUG();
-}
 
 /**
  * _ft_sysfs_store() -  Common routine to write to FT sysfs files
