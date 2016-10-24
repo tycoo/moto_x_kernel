@@ -19,7 +19,6 @@
 #include <linux/of_device.h>
 #include <linux/msm_kgsl.h>
 #include <linux/delay.h>
-#include <linux/dropbox.h>
 
 #include <mach/socinfo.h>
 #include <mach/msm_bus_board.h>
@@ -135,9 +134,6 @@ static struct adreno_device device_3d0 = {
 	.fast_hang_detect = 1,
 	.long_ib_detect = 1,
 };
-
-char kgsl_ft_report[KGSL_FT_REPORT_LEN];
-int kgsl_ft_report_pos;
 
 /* This set of registers are used for Hang detection
  * If the values of these registers are same after
@@ -2591,9 +2587,6 @@ adreno_dump_and_exec_ft(struct kgsl_device *device)
 			* will work as it always has
 			*/
 			kgsl_device_snapshot(device, 1);
-
-			dropbox_queue_event_binary("gpu_snapshot",
-				device->snapshot, device->snapshot_size);
 		}
 
 		result = adreno_ft(device, &ft_data);
@@ -2614,8 +2607,6 @@ adreno_dump_and_exec_ft(struct kgsl_device *device)
 				msecs_to_jiffies(KGSL_TIMEOUT_HANG_DETECT)));
 		}
 		complete_all(&device->ft_gate);
-		dropbox_queue_event_text("gpu_ft_report", kgsl_ft_report,
-			kgsl_ft_report_pos);
 	}
 done:
 	return result;
@@ -3530,8 +3521,6 @@ unsigned int adreno_ft_detect(struct kgsl_device *device,
 		}
 
 		if (fast_hang_detected) {
-				if (device->state != KGSL_STATE_DUMP_AND_FT)
-					kgsl_ft_report_pos = 0;
 			KGSL_FT_ERR(device,
 				"Proc %s, ctxt_id %d ts %d triggered fault tolerance"
 				" on global ts %d\n",
@@ -3561,9 +3550,6 @@ unsigned int adreno_ft_detect(struct kgsl_device *device,
 					KGSL_TIMEOUT_LONG_IB_DETECTION) {
 					if (adreno_dev->long_ib_ts !=
 						curr_global_ts) {
-						if (device->state !=
-							KGSL_STATE_DUMP_AND_FT)
-							kgsl_ft_report_pos = 0;
 						KGSL_FT_ERR(device,
 						"Proc %s, ctxt_id %d ts %d"
 						"used GPU for %d ms long ib "
